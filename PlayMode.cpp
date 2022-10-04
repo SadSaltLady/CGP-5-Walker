@@ -13,23 +13,23 @@
 
 #include <random>
 
-GLuint phonebank_meshes_for_lit_color_texture_program = 0;
-Load< MeshBuffer > phonebank_meshes(LoadTagDefault, []() -> MeshBuffer const * {
-	MeshBuffer const *ret = new MeshBuffer(data_path("phone-bank.pnct"));
-	phonebank_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
+GLuint my_meshes_for_lit_color_texture_program = 0;
+Load< MeshBuffer > my_meshes(LoadTagDefault, []() -> MeshBuffer const * {
+	MeshBuffer const *ret = new MeshBuffer(data_path("testworld.pnct"));
+	my_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
 	return ret;
 });
 
-Load< Scene > phonebank_scene(LoadTagDefault, []() -> Scene const * {
-	return new Scene(data_path("phone-bank.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
-		Mesh const &mesh = phonebank_meshes->lookup(mesh_name);
+Load< Scene > my_scene(LoadTagDefault, []() -> Scene const * {
+	return new Scene(data_path("testworld.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
+		Mesh const &mesh = my_meshes->lookup(mesh_name);
 
 		scene.drawables.emplace_back(transform);
 		Scene::Drawable &drawable = scene.drawables.back();
 
 		drawable.pipeline = lit_color_texture_program_pipeline;
 
-		drawable.pipeline.vao = phonebank_meshes_for_lit_color_texture_program;
+		drawable.pipeline.vao = my_meshes_for_lit_color_texture_program;
 		drawable.pipeline.type = mesh.type;
 		drawable.pipeline.start = mesh.start;
 		drawable.pipeline.count = mesh.count;
@@ -38,16 +38,34 @@ Load< Scene > phonebank_scene(LoadTagDefault, []() -> Scene const * {
 });
 
 WalkMesh const *walkmesh = nullptr;
-Load< WalkMeshes > phonebank_walkmeshes(LoadTagDefault, []() -> WalkMeshes const * {
-	WalkMeshes *ret = new WalkMeshes(data_path("phone-bank.w"));
-	walkmesh = &ret->lookup("WalkMesh");
+Load< WalkMeshes > my_walkmeshes(LoadTagDefault, []() -> WalkMeshes const * {
+	WalkMeshes *ret = new WalkMeshes(data_path("testworld.w"));
+	walkmesh = &ret->lookup("Plane");
 	return ret;
 });
 
-PlayMode::PlayMode() : scene(*phonebank_scene) {
+PlayMode::PlayMode() : scene(*my_scene) {
+
+	//load assests
+	//store the leg parts in a vector
+	std::vector<Scene::Transform *> leg_parts(3);
+	for (auto &transform : scene.transforms) {
+		if ( transform.name == "leg_u") leg_parts[0] = &transform;
+		else if (transform.name == "leg_l") leg_parts[1] = &transform;
+		else if (transform.name == "feet") leg_parts[2] = &transform;
+	}
+	if (leg_parts[0] == nullptr) throw std::runtime_error("male BIRD not found.");
+	if (leg_parts[1] == nullptr) throw std::runtime_error("female BIRD not found.");
+	if (leg_parts[2] == nullptr) throw std::runtime_error("heart not found.");
+	//construct leg 
+	test_leg = Leg(leg_parts[0], leg_parts[1], leg_parts[2]);
+
+	//-------------------------------------------------------------
 	//create a player transform:
 	scene.transforms.emplace_back();
 	player.transform = &scene.transforms.back();
+	//modify the transform to place it at the start point:
+	player.transform->position = test_leg.hip->position + glm::vec3(0.0f, -10.0f, 0.0f);
 
 	//create a player camera attached to a child of the player transform:
 	scene.transforms.emplace_back();
@@ -66,6 +84,13 @@ PlayMode::PlayMode() : scene(*phonebank_scene) {
 	//start player walking at nearest walk point:
 	player.at = walkmesh->nearest_walk_point(player.transform->position);
 
+
+	//print out location of test leg and joints
+	test_leg.printEverything();
+		//testing leg ik
+	test_leg.update(glm::vec3(5.5f, 0.0f, 0.0f));
+
+	test_leg.printEverything();
 }
 
 PlayMode::~PlayMode() {
@@ -93,7 +118,7 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			down.downs += 1;
 			down.pressed = true;
 			return true;
-		}
+		} 
 	} else if (evt.type == SDL_KEYUP) {
 		if (evt.key.keysym.sym == SDLK_a) {
 			left.pressed = false;
@@ -137,8 +162,18 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 }
 
 void PlayMode::update(float elapsed) {
+
+	//testing if leg ik works
+	timer += elapsed;
+	if (timer > 5.0f) {
+		timer = 0.0f;
+	}
+
+	float percent = timer / 5.0f;
+	glm::vec3 target = glm::mix(glm::vec3(6.f, -1.0f, 0.0f), glm::vec3(3.f, -1.0f, 0.0f), percent);
+	test_leg.update(target);
 	//player walking:
-	{
+	{		
 		//combine inputs into a move:
 		constexpr float PlayerSpeed = 3.0f;
 		glm::vec2 move = glm::vec2(0.0f);
@@ -284,4 +319,72 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 			glm::u8vec4(0xff, 0xff, 0xff, 0x00));
 	}
 	GL_ERRORS();
+}
+
+//take target (in world space) and updates the ankle to target
+void Leg::update(glm::vec3 const &target) {
+	/*referenced this tutorial:
+	https://www.alanzucconi.com/2018/05/02/ik-2d-1/ */
+	//given a position, update the transforms to reach that position:
+	glm::vec3 hip_world = hip->getWorldPosition();
+	length_c = glm::length(target - hip_world);
+	std::cout << "length_c: " << length_c << std::endl;
+	//account for the case where target is too far away:
+	//angle from hip to target (in radians)
+	float theta = atan2(target.y - hip_world.y, target.x - hip_world.x);
+	std::cout << "theta: " << theta << std::endl;
+	//too far away
+	if ( length_a + length_b < length_c) {
+		std::cout << "too far away" << std::endl;
+		angleA = theta;
+		angleB = 0.0f;
+	} 
+	else
+	{
+		std::cout << "not too far away" << std::endl;
+		//inner angle Alpha (in radians)
+		float thing = (length_a * length_a + length_c * length_c - length_b * length_b);
+		std::cout << "thing: " << thing << std::endl;
+		float thing2 = (2 * length_a * length_c);
+		std::cout << "thing2: " << thing2 << std::endl;
+		float thing3 = thing / thing2;
+		std::cout << "thing3: " << thing3 << std::endl;
+		float alpha = acos((length_a * length_a + length_c * length_c - length_b * length_b) / (2.0f * length_a * length_c));
+		//inner angle beta (in radians)
+		float beta = acos((length_a * length_a + length_b * length_b - length_c * length_c) / (2.0f * length_a * length_b));
+		std::cout << "alpha: " << alpha << std::endl;
+		std::cout << "beta: " << beta << std::endl;
+
+		//calculate the respective angles to be applied to the joints:
+		angleA = theta - alpha; // of is it theta + alpha?
+		angleB = (float)M_PI - beta;
+	}
+
+	//update the transforms:
+	hip->rotation = glm::angleAxis(angleA, glm::vec3(0.0f, 1.0f, 0.0f));
+	knee->rotation = glm::angleAxis(angleB, glm::vec3(0.0f, 1.0f, 0.0f));
+
+}
+
+void Leg::printEverything() {
+	std::cout << "---------------------" << std::endl;
+	//find world position 
+	glm::vec3 hipworld = hip->make_local_to_world() * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+	glm::vec3 kneeworld = knee->make_local_to_world() * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+	glm::vec3 footworld = ankle->make_local_to_world() * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+	//print world position
+	std::cout << "hipworld: " << hipworld.x << ", " << hipworld.y << ", " << hipworld.z << std::endl;
+	std::cout << "kneeworld: " << kneeworld.x << ", " << kneeworld.y << ", " << kneeworld.z << std::endl;
+	std::cout << "footworld: " << footworld.x << ", " << footworld.y << ", " << footworld.z << std::endl;
+	//so what the fuck are these
+	/*
+	std::cout << "hip position: " << hip->position.x << ", " << hip->position.y << ", " << hip->position.z << std::endl;
+	std::cout << "knee position: " << knee->position.x << ", " << knee->position.y << ", " << knee->position.z << std::endl;
+	std::cout << "ankle position: " << ankle->position.x << ", " << ankle->position.y << ", " << ankle->position.z << std::endl;
+	*/
+	std::cout << "angleA: " << angleA << std::endl;
+	std::cout << "angleB: " << angleB << std::endl;
+	std::cout << "length_a: " << length_a << std::endl;
+	std::cout << "length_b: " << length_b << std::endl;
+	std::cout << "---------------------" << std::endl;
 }

@@ -47,6 +47,9 @@ struct Scene {
 		Transform(Transform const &) = delete;
 		//if we delete some constructors, we need to let the compiler know that the default constructor is still okay:
 		Transform() = default;
+		//added utility functions:
+		glm::vec3 getWorldPosition() const;
+		glm::quat getWorldRotation() const;
 	};
 
 	struct Drawable {
