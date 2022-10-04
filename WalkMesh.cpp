@@ -46,6 +46,15 @@ glm::vec3 barycentric_weights(glm::vec3 const &a, glm::vec3 const &b, glm::vec3 
 	//referenced:https://stackoverflow.com/questions/9605556/how-to-project-a-point-onto-a-plane-in-3d
 	//for faster implementation check https://gamedev.stackexchange.com/questions/28781/easy-way-to-project-point-onto-triangle-or-plane
 	glm::vec3 normal = glm::cross(c - a, b - a);
+	/*
+	alternative way :
+	//only works if the triangle is not degenerate
+	glm::vec3 normal = glm::normalize(glm::cross(c - a, b - a));
+	glm::vec3 pt_perp = glm::cross(norm, b - a);
+	float pt_area = glm::dot(pt_perp, pt - a);
+	return (glm::vec3(area, area, area) / area + area + area)
+	*/
+
 	//find distance between point and plane
 	float d = glm::dot(glm::normalize(normal), (pt - a));
 	glm::vec3 pt_on_plane = pt - glm::normalize(normal) * d;
@@ -176,7 +185,8 @@ void WalkMesh::walk_in_triangle(WalkPoint const &start, glm::vec3 const &step, W
 		}
 		end.weights = glm::mix(start.weights, step_coords, min_dist);
 		time  = min_dist;
-
+		//ALTERNATIVE:
+		//take the min non negative value as time -- ? min(x > 0, 1)
 		//Remember: our convention is that when a WalkPoint is on an edge,
 		// then wp.weights.z == 0.0f (so will likely need to re-order the indices)
 		

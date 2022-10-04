@@ -87,8 +87,8 @@ PlayMode::PlayMode() : scene(*my_scene) {
 
 	//print out location of test leg and joints
 	test_leg.printEverything();
-		//testing leg ik
-	test_leg.update(glm::vec3(5.5f, 0.0f, 0.0f));
+	//testing leg ik	
+	test_leg.hip->position -= glm::vec3(0.0f, 0.0f, 3.0f);
 
 	test_leg.printEverything();
 }
@@ -168,10 +168,13 @@ void PlayMode::update(float elapsed) {
 	if (timer > 5.0f) {
 		timer = 0.0f;
 	}
-
+	
+	/*
 	float percent = timer / 5.0f;
-	glm::vec3 target = glm::mix(glm::vec3(6.f, -1.0f, 0.0f), glm::vec3(3.f, -1.0f, 0.0f), percent);
+	glm::vec3 target = glm::mix(glm::vec3(-3.f, 3.0f, 3.0f), glm::vec3(3.f, 0.0f, 0.0f), percent);
 	test_leg.update(target);
+	*/
+	
 	//player walking:
 	{		
 		//combine inputs into a move:
@@ -322,16 +325,35 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 }
 
 //take target (in world space) and updates the ankle to target
-void Leg::update(glm::vec3 const &target) {
+void Leg::update(glm::vec3 const &targetWorld) {
 	/*referenced this tutorial:
 	https://www.alanzucconi.com/2018/05/02/ik-2d-1/ */
+	//a little too tired to implement this rn, but here's my thougts:
+	/*
+	1. to minimize computation, put things into the local space of the hip 
+	2. calculate the angle between the target and the arbitrary front of leg (like +x or something)
+	3. notice the calculation of alpha and beta is completely length dependent
+	4. 
+	*/
+	//find rotation needed on the hip level to support 3d movement
 	//given a position, update the transforms to reach that position:
 	glm::vec3 hip_world = hip->getWorldPosition();
-	length_c = glm::length(target - hip_world);
+	glm::vec3 omega = (targetWorld - hip_world);
+	glm::vec3 omega_xy = glm::normalize(glm::vec3(omega.x, omega.y, 0.0f));
+	glm::quat rotateBack = glm::rotation (glm::vec3(1.0f, 0.0f, 0.0f), omega_xy);
+	//rotate target such that target is on the x axis
+	glm::vec3 target = glm::rotation(omega_xy, glm::vec3(1.0f, 0.0f, 0.0f)) * targetWorld;
+	//IMPORTATNT: everything in world space!
+	
+
+
+	//rotate the hip back such that it's x axis is the same as the world x axis
+	//glm::quat rotateHip = glm::rotation(glm::normalize(hip_world - ankle->getWorldPosition()), glm::vec3(1.0f, 0.0f, 0.0f));
+	length_c = glm::length(target - hip_world);// this calculation needs to be done on that plane
 	std::cout << "length_c: " << length_c << std::endl;
 	//account for the case where target is too far away:
 	//angle from hip to target (in radians)
-	float theta = atan2(target.y - hip_world.y, target.x - hip_world.x);
+	float theta = atan2(target.z - hip_world.z, target.x - hip_world.x);
 	std::cout << "theta: " << theta << std::endl;
 	//too far away
 	if ( length_a + length_b < length_c) {
@@ -343,12 +365,14 @@ void Leg::update(glm::vec3 const &target) {
 	{
 		std::cout << "not too far away" << std::endl;
 		//inner angle Alpha (in radians)
+		/*
 		float thing = (length_a * length_a + length_c * length_c - length_b * length_b);
 		std::cout << "thing: " << thing << std::endl;
 		float thing2 = (2 * length_a * length_c);
 		std::cout << "thing2: " << thing2 << std::endl;
 		float thing3 = thing / thing2;
 		std::cout << "thing3: " << thing3 << std::endl;
+		*/
 		float alpha = acos((length_a * length_a + length_c * length_c - length_b * length_b) / (2.0f * length_a * length_c));
 		//inner angle beta (in radians)
 		float beta = acos((length_a * length_a + length_b * length_b - length_c * length_c) / (2.0f * length_a * length_b));
@@ -356,13 +380,14 @@ void Leg::update(glm::vec3 const &target) {
 		std::cout << "beta: " << beta << std::endl;
 
 		//calculate the respective angles to be applied to the joints:
+		//reversing the signs here can change the direction of the leg
 		angleA = theta - alpha; // of is it theta + alpha?
 		angleB = (float)M_PI - beta;
-	}
+	}	
 
 	//update the transforms:
-	hip->rotation = glm::angleAxis(angleA, glm::vec3(0.0f, 1.0f, 0.0f));
-	knee->rotation = glm::angleAxis(angleB, glm::vec3(0.0f, 1.0f, 0.0f));
+	hip->rotation = rotateBack * glm::angleAxis(-angleA, glm::vec3(0.0f, 1.0f,0.0f)) ;
+	knee->rotation = glm::angleAxis(-angleB, glm::vec3(0.0f, 1.0f, 0.0f));
 
 }
 

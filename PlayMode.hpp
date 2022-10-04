@@ -37,6 +37,22 @@ struct Leg {
 	void printEverything();
 };
 
+
+struct Walker {
+	//a body with two legs
+	Scene::Transform *body = nullptr;
+	Leg left_leg = Leg();
+	Leg right_leg = Leg();
+
+	//make a default constructor:
+	Walker() = default;
+
+	//make a constructor that takes in the body and the two legs:
+	Walker(Scene::Transform *body_, Leg left_leg_, Leg right_leg_) : body(body_), left_leg(left_leg_), right_leg(right_leg_) {
+		//nothing here yet...
+	}
+};
+
 struct PlayMode : Mode {
 	PlayMode();
 	virtual ~PlayMode();
