@@ -44,9 +44,11 @@ struct Leg {
 	//debug print function:
 	void printEverything();
 	//update leg walk point
-	void update_leg_at(glm::vec3 offset);
+	void update_leg_at(glm::vec3 remain);
 	//update the stepping point to at position...
 	void update_step_to();
+	//check if legs are going too far
+	bool is_too_far();
 };
 
 
@@ -82,6 +84,8 @@ struct Walker {
 
 	//update function to move legs accordingly 
 	void update_legs();
+	//update leg walk point
+	void update_at(glm::vec3 remain);
 
 };
 
