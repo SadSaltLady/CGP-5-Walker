@@ -27,8 +27,9 @@ struct Leg {
 	glm::quat hip_start_pos = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
 	//walkmesh location:
 	WalkPoint at;
+	//where it is stepping
+	glm::vec3 step_to;
 	//make a default constructor:
-	float outer_angle = 0.0f; //what is this??
 	Leg() = default;
 	//make a constructor that takes in the three joints:
 	Leg(Scene::Transform *hip_, Scene::Transform *knee_, Scene::Transform *ankle_) : hip(hip_), knee(knee_), ankle(ankle_) {
@@ -42,6 +43,8 @@ struct Leg {
 	void update(glm::vec3 const &targetWorld);
 	//debug print function:
 	void printEverything();
+	//update leg walk point
+	void update_stepto(glm::vec3 offset, WalkMesh const &walkmesh);
 };
 
 

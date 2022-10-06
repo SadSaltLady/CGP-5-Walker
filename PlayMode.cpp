@@ -399,6 +399,7 @@ void PlayMode::update(float elapsed) {
 	//Just a leg, walking...
 	static bool once = false;
 	static glm::vec3 leg_pos = walker.left_leg.ankle->getWorldPosition();
+	//make a lambda to move leg...
 	{
 		float angle = 0.f;
 		float dir = 0.f;
@@ -407,13 +408,13 @@ void PlayMode::update(float elapsed) {
 		if (turn_left.pressed && !turn_right.pressed) angle = 5.0f;
 		if (turn_right.pressed && !turn_left.pressed) angle = -5.0f;
 
-		Leg *leg = &walker.left_leg;
+		Leg *leg = &walker.right_leg;
 
 		walker.world_rotation += angle; //use this to keep track of leg rotation
 		walker.world_rotation = glm::mod(walker.world_rotation, 360.f); //stays within 360
 		//leg->hip->rotation = glm::angleAxis(glm::radians(walker.world_rotation), glm::vec3(0.0f, 0.0f, 1.0f)) * leg->hip_start_pos;
 		//move in facing direction (in world space):
-		glm::vec3 offset = glm::vec4(dir*0.2f, 0.f, 0.0f, 0.0f);
+		glm::vec3 offset = glm::vec4(dir*0.2f, 0.f,  0.0f, 0.0f);
 
 		//get move in world coordinate system:
 		glm::vec3 remain = offset;
@@ -467,7 +468,7 @@ void PlayMode::update(float elapsed) {
 		}
 
 		//update leg position:
-		leg->hip->position = walkmesh->to_world_point(leg->at) + glm::vec3(0.0f, 0.0f, walker.groundOffset);
+		leg->hip->position = walkmesh->to_world_point(leg->at) + glm::vec3(0.0f, 0.0f, 9.0f);
 		//draw debug cone:
 		
 		//update leg?
@@ -565,10 +566,9 @@ void Leg::update(glm::vec3 const &targetWorld) {
 	/*referenced this tutorial:
 	https://www.alanzucconi.com/2018/05/02/ik-2d-1/ */
 	//a little too tired to implement this rn, but here's my thougts:
-
-	/*
+	
 	std::cout << "targetworld: " << targetWorld.x << ", " << targetWorld.y << ", " << targetWorld.z << std::endl;
-	glm::vec3 hip_world = hip->getWorldPosition();
+	glm::vec3 hip_world = hip->position;
 	std::cout << "hip_world: " << hip_world.x << ", " << hip_world.y << ", " << hip_world.z << std::endl;
 	glm::vec3 omega = targetWorld - hip_world;
 	std::cout << "omega: " << omega.x << ", " << omega.y << ", " << omega.z << std::endl;
@@ -580,33 +580,31 @@ void Leg::update(glm::vec3 const &targetWorld) {
 		omega_xy = glm::normalize(omega_xy);
 	}
 	std::cout << "omega_xy: " << omega_xy.x << ", " << omega_xy.y << ", " << omega_xy.z << std::endl;
-	glm::quat rotateBack = glm::rotation(glm::vec3(1.0f, 0.0f, 0.0f), omega_xy);
-	glm::quat rotateTo = glm::rotation(omega_xy, glm::vec3(1.0f, 0.0f, 0.0f));
+	/*
+	float thingy = glm::dot(omega_xy, glm::vec3(1.0f, 0.0f, 0.0f));
+	std::cout << "thingy: " << thingy << std::endl;
+	float ok = acos(thingy);
+	std::cout << "ok: " << ok << std::endl;
+	glm::quat rotateBack = glm::angleAxis(-ok, glm::vec3(0.0f, 0.0f, 1.0f));//glm::rotation(glm::vec3(1.0f, 0.0f, 0.0f), omega_xy);
+	glm::quat rotateTo = glm::angleAxis(ok, glm::vec3(0.0f, 0.0f, 1.0f));//glm::rotation(omega_xy, glm::vec3(1.0f, 0.0f, 0.0f));
 	//glm::rotation(glm::vec3(1.0f, 0.0f, 0.0f), omega_xy);
-	//rotate target such that target is on the x axis
 	*/
-
-	//trying it in a different way: 
-	glm::vec3 omega = hip->make_world_to_local() * glm::vec4(targetWorld, 1.0f);
-	//rotate local such that it alignes with the local x axis
-	glm::vec3 omega_xy = glm::vec3(omega.x, omega.y, 0.0f);
-	if (omega_xy.x < 0.0005f && omega_xy.y < 0.0005f) {
-		omega_xy = glm::vec3(1.0f, 0.0f, 0.0f);
-	} else {
-		omega_xy = glm::normalize(omega_xy);
-	}
-	glm::quat rotateBack = glm::rotation(glm::vec3(1.0f, 0.0f, 0.0f), omega_xy);
-	glm::quat rotateTo = glm::rotation(omega_xy, glm::vec3(1.0f, 0.0f, 0.0f));
-	glm::vec3 target = rotateTo * omega;
+	if (abs(omega.x) < 0.0005f) omega.x = 0.f;
+	if (abs(omega.y) < 0.0005f) omega.y = 0.0f;
+	float theta_base = atan2(omega.y, omega.x);
+	glm::quat rotateTo = glm::angleAxis(-theta_base, glm::vec3(0.0f, 0.0f, 1.0f));
+	glm::quat rotateBack = glm::angleAxis(theta_base, glm::vec3(0.0f, 0.0f, 1.0f));
+	//rotate target such that target is on the x axis
+	glm::vec3 target = rotateTo* omega;
 	std::cout << "target: " << target.x << ", " << target.y << ", " << target.z << std::endl;
 	//glm::quat tester = glm::inverse(body->getWorldRotation()) * rotateBack;
 
 	//rotate the hip back such that it's x axis is the same as the world x axis
-	length_c = glm::length(target - hip_world);// this calculation needs to be done on that plane
+	length_c = glm::length(target);// this calculation needs to be done on that plane
 	//std::cout << "length_c: " << length_c << std::endl;
 	//account for the case where target is too far away:
 	//angle from hip to target (in radians)
-	float theta = atan2(target.z - hip_world.z, target.x - hip_world.x);
+	float theta = atan2(target.z, target.x);
 	//std::cout << "theta: " << theta << std::endl;
 	//too far away
 	if ( length_a + length_b < length_c) {
@@ -623,13 +621,13 @@ void Leg::update(glm::vec3 const &targetWorld) {
 		float beta = acos((length_a * length_a + length_b * length_b - length_c * length_c) / (2.0f * length_a * length_b));
 		//calculate the respective angles to be applied to the joints:
 		//reversing the signs here can change the direction of the leg
-		angleA = theta - alpha; // of is it theta + alpha?
+		angleA = theta - alpha;
 		angleB = (float)M_PI - beta;
 	}	
 
 	//update the transforms:
-	hip->rotation = rotateBack * glm::angleAxis(-angleA, glm::vec3(0.0f, 1.0f,.0f));
-	knee->rotation = glm::angleAxis(-angleB, glm::vec3(0.0f, 1.0f, 0.0f));
+	hip->rotation = rotateBack * glm::angleAxis(angleA, glm::vec3(0.0f, -1.0f,.0f));
+	knee->rotation = glm::angleAxis(angleB, glm::vec3(0.0f, -1.0f, 0.0f));
 
 }
 
@@ -654,4 +652,55 @@ void Leg::printEverything() {
 	std::cout << "length_a: " << length_a << std::endl;
 	std::cout << "length_b: " << length_b << std::endl;
 	std::cout << "---------------------" << std::endl;
+}
+
+void Leg::update_leg_at(glm::vec3 offset, WalkMesh const &walkmesh)
+{
+	Leg* leg = this;
+	for (uint32_t iter = 0; iter < 10; ++iter) {
+		if (remain == glm::vec3(0.0f)) break;
+		WalkPoint end;
+		float time;
+		walkmesh->walk_in_triangle(leg->at, remain, &end, &time);
+		leg->at = end;
+		if (time == 1.0f) {
+			//finished within triangle:
+			remain = glm::vec3(0.0f);
+			break;
+		}
+		//some step remains:
+		remain *= (1.0f - time);
+		//try to step over edge:
+		glm::quat rotation;
+		if (walkmesh->cross_edge(leg->at, &end, &rotation)) {
+			//stepped to a new triangle:
+			leg->at = end;
+			//rotate step to follow surface:
+			remain = rotation * remain;
+		} else {
+			//ran into a wall, bounce / slide along it:
+			glm::vec3 const &a = walkmesh->vertices[leg->at.indices.x];
+			glm::vec3 const &b = walkmesh->vertices[leg->at.indices.y];
+			glm::vec3 const &c = walkmesh->vertices[leg->at.indices.z];
+			glm::vec3 along = glm::normalize(b-a);
+			glm::vec3 normal = glm::normalize(glm::cross(b-a, c-a));
+			glm::vec3 in = glm::cross(normal, along);
+
+			//check how much 'remain' is pointing out of the triangle:
+			float d = glm::dot(remain, in);
+			if (d < 0.0f) {
+				//bounce off of the wall:
+				remain += (-1.25f * d) * in;
+			} else {
+				//if it's just pointing along the edge, bend slightly away from wall:
+				remain += 0.01f * d * in;
+			}
+		}
+	}
+
+	if (remain != glm::vec3(0.0f)) {
+		std::cout << "NOTE: code used full iteration budget for walking." << std::endl;
+		assert(false);
+	}
+
 }
