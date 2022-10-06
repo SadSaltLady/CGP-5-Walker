@@ -23,19 +23,21 @@ struct Leg {
 	float angleA = 0.0f;
 	float angleB = 0.0f;
 
+	//for debug purposes, but annoying
+	glm::quat hip_start_pos = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
 	//walkmesh location:
 	WalkPoint at;
 	//make a default constructor:
-
-	float outer_angle = 0.0f;
+	float outer_angle = 0.0f; //what is this??
 	Leg() = default;
 	//make a constructor that takes in the three joints:
 	Leg(Scene::Transform *hip_, Scene::Transform *knee_, Scene::Transform *ankle_) : hip(hip_), knee(knee_), ankle(ankle_) {
 		//compute lengths of leg segments:
 		length_a = glm::length(hip->getWorldPosition() - knee->getWorldPosition());
 		length_b = glm::length(knee->getWorldPosition() - ankle->getWorldPosition());
+		hip_start_pos = hip->rotation;
 	}
-
+	//update the walkmesh position based on current 
 	//update function to move the leg to a given position:
 	void update(glm::vec3 const &targetWorld);
 	//debug print function:
@@ -67,8 +69,8 @@ struct Walker {
 
 	//make a constructor that takes in the body and the two legs:
 	Walker(Scene::Transform *body_, Leg left_leg_, Leg right_leg_) : body(body_), left_leg(left_leg_), right_leg(right_leg_) {
-		body_to_leftleg = body->getWorldPosition() - left_leg.hip->getWorldPosition();
-		body_to_rightleg = body->getWorldPosition() - right_leg.hip->getWorldPosition();
+		body_to_leftleg = left_leg.hip->getWorldPosition() - body->getWorldPosition();
+		body_to_rightleg =  right_leg.hip->getWorldPosition() - body->getWorldPosition();
 		left_leg.knee->rotation = glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 		
 	}

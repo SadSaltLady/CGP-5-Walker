@@ -98,6 +98,9 @@ PlayMode::PlayMode() : scene(*my_scene) {
 	//initalize Walker's position
 	walker.at = walkmesh->nearest_walk_point(walker.body->getWorldPosition());
 	walker.body->position = walkmesh->to_world_point(walker.at) + glm::vec3(0.0f, 0.0f, walker.groundOffset);
+	//initialize the walkers leg's mesh 
+	walker.left_leg.at = walkmesh->nearest_walk_point(walker.left_leg.hip->getWorldPosition());
+	walker.right_leg.at = walkmesh->nearest_walk_point(walker.right_leg.hip->getWorldPosition());
 	//TODO: change into average of normal later, when u set up the leg walk animation
 	//snake.left_leg.hip->position = walkmesh->to_world_point(snake.at) + glm::vec3(0.0f, 0.0f, snake.groundOffset);
 	//leg_at = walkmesh->nearest_walk_point(right_leg.hip->getWorldPosition());
@@ -300,6 +303,7 @@ void PlayMode::update(float elapsed) {
 
 
 	//walker walkin
+	/*
 	{
 		float angle = 0.f;
 		float dir = 0.f;
@@ -315,7 +319,7 @@ void PlayMode::update(float elapsed) {
 		walker.world_rotation = glm::mod(walker.world_rotation, 360.f);
 		walker.body->rotation = glm::angleAxis(glm::radians(walker.world_rotation), glm::vec3(0.0f, 0.0f, 1.0f));
 		//move in facing direction (in world space):
-		glm::vec3 offset = walker.body->make_local_to_world() * glm::vec4(0.0f, dir, 0.0f, 0.0f);
+		glm::vec3 offset = walker.body->make_local_to_world() * glm::vec4(0.0f, dir*0.2f, 0.0f, 0.0f);
 		
 		//get move in world coordinate system:
 		glm::vec3 remain = offset;
@@ -372,6 +376,10 @@ void PlayMode::update(float elapsed) {
 		//std::cout << "walker position: " << walker.body->position.x << ", " << walker.body->position.y << ", " << walker.body->position.z << std::endl;
 		walker.update_legs();
 		//update the rotation 
+		walker.left_leg.update(walkmesh->to_world_point(walker.left_leg.at));
+		//place debug cone 
+		debugcone->position = walkmesh->to_world_point(walker.left_leg.at);
+		std::cout << "debugcone position: " << debugcone->position.x << ", " << debugcone->position.y << ", " << debugcone->position.z << std::endl;
 		/*
 		debugcone->position = walkmesh->to_world_point(walker.at);
 		glm::vec3 debug_world = debugcone->getWorldPostion();
@@ -387,8 +395,90 @@ void PlayMode::update(float elapsed) {
 		//std::cout << "radians: " << glm::radians(walker.world_rotation) << std::endl;
 		//walker.left_leg.printEverything();
 		*/
-	
+
+	//Just a leg, walking...
+	static bool once = false;
+	static glm::vec3 leg_pos = walker.left_leg.ankle->getWorldPosition();
+	{
+		float angle = 0.f;
+		float dir = 0.f;
+		if (front.pressed && !back.pressed) dir = 1.0f;
+		if (back.pressed && !front.pressed) dir = -1.0f;
+		if (turn_left.pressed && !turn_right.pressed) angle = 5.0f;
+		if (turn_right.pressed && !turn_left.pressed) angle = -5.0f;
+
+		Leg *leg = &walker.left_leg;
+
+		walker.world_rotation += angle; //use this to keep track of leg rotation
+		walker.world_rotation = glm::mod(walker.world_rotation, 360.f); //stays within 360
+		//leg->hip->rotation = glm::angleAxis(glm::radians(walker.world_rotation), glm::vec3(0.0f, 0.0f, 1.0f)) * leg->hip_start_pos;
+		//move in facing direction (in world space):
+		glm::vec3 offset = glm::vec4(dir*0.2f, 0.f, 0.0f, 0.0f);
+
+		//get move in world coordinate system:
+		glm::vec3 remain = offset;
+
+		//using a for() instead of a while() here so that if walkpoint gets stuck in
+		// some awkward case, code will not infinite loop:
+		for (uint32_t iter = 0; iter < 10; ++iter) {
+			if (remain == glm::vec3(0.0f)) break;
+			WalkPoint end;
+			float time;
+			walkmesh->walk_in_triangle(leg->at, remain, &end, &time);
+			leg->at = end;
+			if (time == 1.0f) {
+				//finished within triangle:
+				remain = glm::vec3(0.0f);
+				break;
+			}
+			//some step remains:
+			remain *= (1.0f - time);
+			//try to step over edge:
+			glm::quat rotation;
+			if (walkmesh->cross_edge(leg->at, &end, &rotation)) {
+				//stepped to a new triangle:
+				leg->at = end;
+				//rotate step to follow surface:
+				remain = rotation * remain;
+			} else {
+				//ran into a wall, bounce / slide along it:
+				glm::vec3 const &a = walkmesh->vertices[leg->at.indices.x];
+				glm::vec3 const &b = walkmesh->vertices[leg->at.indices.y];
+				glm::vec3 const &c = walkmesh->vertices[leg->at.indices.z];
+				glm::vec3 along = glm::normalize(b-a);
+				glm::vec3 normal = glm::normalize(glm::cross(b-a, c-a));
+				glm::vec3 in = glm::cross(normal, along);
+
+				//check how much 'remain' is pointing out of the triangle:
+				float d = glm::dot(remain, in);
+				if (d < 0.0f) {
+					//bounce off of the wall:
+					remain += (-1.25f * d) * in;
+				} else {
+					//if it's just pointing along the edge, bend slightly away from wall:
+					remain += 0.01f * d * in;
+				}
+			}
+		}
+
+		if (remain != glm::vec3(0.0f)) {
+			std::cout << "NOTE: code used full iteration budget for walking." << std::endl;
+			assert(false);
+		}
+
+		//update leg position:
+		leg->hip->position = walkmesh->to_world_point(leg->at) + glm::vec3(0.0f, 0.0f, walker.groundOffset);
+		//draw debug cone:
+		
+		//update leg?
+		if (!once) {
+			leg_pos = walkmesh->to_world_point(leg->at);
+			once = true;
+		}
+		debugcone->position = leg_pos;
+		leg->update(leg_pos);
 	}
+	
 
 	//reset button press counters:
 	left.downs = 0;
@@ -466,6 +556,8 @@ void Walker::update_legs() {
 	//add onto postion of legs:
 	left_leg.hip->position = body->position + left_offset;
 	right_leg.hip->position = body->position + right_offset;
+	//update the leg's at position 
+
 }
 
 //take target (in world space) and updates the ankle to target
@@ -474,36 +566,48 @@ void Leg::update(glm::vec3 const &targetWorld) {
 	https://www.alanzucconi.com/2018/05/02/ik-2d-1/ */
 	//a little too tired to implement this rn, but here's my thougts:
 
-	//find rotation needed on the hip level to support 3d movement
 	/*
-	1. counter act the rotation of the body (get world rotation of body)
-	2. do what we did before, basically??
-	3. rotate it such that it encompasses the body rotation again
-	*/
-	
+	std::cout << "targetworld: " << targetWorld.x << ", " << targetWorld.y << ", " << targetWorld.z << std::endl;
 	glm::vec3 hip_world = hip->getWorldPosition();
 	std::cout << "hip_world: " << hip_world.x << ", " << hip_world.y << ", " << hip_world.z << std::endl;
-	glm::vec3 omega = (hip_world - targetWorld);
+	glm::vec3 omega = targetWorld - hip_world;
+	std::cout << "omega: " << omega.x << ", " << omega.y << ", " << omega.z << std::endl;
 	//assert (glm::vec3(omega.x, omega.y, 0.0f) != glm::vec3(0.0f, 0.0f, 0.0f));
 	glm::vec3 omega_xy = glm::vec3(omega.x, omega.y, 0.0f);
-	if (omega_xy == glm::vec3(0.0f, 0.0f, 0.0f)) {
-		omega_xy = glm::vec3(1.0f,0.0f, 0.0f);
+	if (omega_xy.x < 0.0005f && omega_xy.y < 0.0005f) {
+		omega_xy = glm::vec3(1.0f, 0.0f, 0.0f);
+	} else {
+		omega_xy = glm::normalize(omega_xy);
+	}
+	std::cout << "omega_xy: " << omega_xy.x << ", " << omega_xy.y << ", " << omega_xy.z << std::endl;
+	glm::quat rotateBack = glm::rotation(glm::vec3(1.0f, 0.0f, 0.0f), omega_xy);
+	glm::quat rotateTo = glm::rotation(omega_xy, glm::vec3(1.0f, 0.0f, 0.0f));
+	//glm::rotation(glm::vec3(1.0f, 0.0f, 0.0f), omega_xy);
+	//rotate target such that target is on the x axis
+	*/
+
+	//trying it in a different way: 
+	glm::vec3 omega = hip->make_world_to_local() * glm::vec4(targetWorld, 1.0f);
+	//rotate local such that it alignes with the local x axis
+	glm::vec3 omega_xy = glm::vec3(omega.x, omega.y, 0.0f);
+	if (omega_xy.x < 0.0005f && omega_xy.y < 0.0005f) {
+		omega_xy = glm::vec3(1.0f, 0.0f, 0.0f);
 	} else {
 		omega_xy = glm::normalize(omega_xy);
 	}
 	glm::quat rotateBack = glm::rotation(glm::vec3(1.0f, 0.0f, 0.0f), omega_xy);
-	//rotate target such that target is on the x axis
-	glm::vec3 target = glm::rotation(omega_xy, glm::vec3(1.0f, 0.0f, 0.0f)) * targetWorld;
+	glm::quat rotateTo = glm::rotation(omega_xy, glm::vec3(1.0f, 0.0f, 0.0f));
+	glm::vec3 target = rotateTo * omega;
 	std::cout << "target: " << target.x << ", " << target.y << ", " << target.z << std::endl;
 	//glm::quat tester = glm::inverse(body->getWorldRotation()) * rotateBack;
 
 	//rotate the hip back such that it's x axis is the same as the world x axis
 	length_c = glm::length(target - hip_world);// this calculation needs to be done on that plane
-	std::cout << "length_c: " << length_c << std::endl;
+	//std::cout << "length_c: " << length_c << std::endl;
 	//account for the case where target is too far away:
 	//angle from hip to target (in radians)
 	float theta = atan2(target.z - hip_world.z, target.x - hip_world.x);
-	std::cout << "theta: " << theta << std::endl;
+	//std::cout << "theta: " << theta << std::endl;
 	//too far away
 	if ( length_a + length_b < length_c) {
 		angleA = theta;
@@ -511,8 +615,8 @@ void Leg::update(glm::vec3 const &targetWorld) {
 	} 
 	else
 	{
-		float thing = (length_a * length_a + length_c * length_c - length_b * length_b) / (2 * length_a * length_c);
-		std::cout<< "thing: " << thing << std::endl;
+		//float thing = (length_a * length_a + length_c * length_c - length_b * length_b) / (2 * length_a * length_c);
+		//std::cout<< "thing: " << thing << std::endl;
 		//inner angle Alpha (in radians)
 		float alpha = acos((length_a * length_a + length_c * length_c - length_b * length_b) / (2.0f * length_a * length_c));
 		//inner angle beta (in radians)
@@ -524,7 +628,7 @@ void Leg::update(glm::vec3 const &targetWorld) {
 	}	
 
 	//update the transforms:
-	hip->rotation = glm::angleAxis(-angleA, glm::vec3(0.0f, 1.0f,.0f))* rotateBack;
+	hip->rotation = rotateBack * glm::angleAxis(-angleA, glm::vec3(0.0f, 1.0f,.0f));
 	knee->rotation = glm::angleAxis(-angleB, glm::vec3(0.0f, 1.0f, 0.0f));
 
 }
