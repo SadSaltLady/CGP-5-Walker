@@ -207,7 +207,7 @@ void PlayMode::update(float elapsed) {
 
 	//testing if leg ik works
 	timer += elapsed;
-	if (timer > 5.0f) {
+	if (timer > 3.0f) {
 		timer = 0.0f;
 	}
 	
@@ -323,82 +323,9 @@ void PlayMode::update(float elapsed) {
 		
 		//get move in world coordinate system:
 		glm::vec3 remain = offset;
-
-		//using a for() instead of a while() here so that if walkpoint gets stuck in
-		// some awkward case, code will not infinite loop:
-		for (uint32_t iter = 0; iter < 10; ++iter) {
-			if (remain == glm::vec3(0.0f)) break;
-			WalkPoint end;
-			float time;
-			walkmesh->walk_in_triangle(walker.at, remain, &end, &time);
-			walker.at = end;
-			if (time == 1.0f) {
-				//finished within triangle:
-				remain = glm::vec3(0.0f);
-				break;
-			}
-			//some step remains:
-			remain *= (1.0f - time);
-			//try to step over edge:
-			glm::quat rotation;
-			if (walkmesh->cross_edge(walker.at, &end, &rotation)) {
-				//stepped to a new triangle:
-				walker.at = end;
-				//rotate step to follow surface:
-				remain = rotation * remain;
-			} else {
-				//ran into a wall, bounce / slide along it:
-				glm::vec3 const &a = walkmesh->vertices[walker.at.indices.x];
-				glm::vec3 const &b = walkmesh->vertices[walker.at.indices.y];
-				glm::vec3 const &c = walkmesh->vertices[walker.at.indices.z];
-				glm::vec3 along = glm::normalize(b-a);
-				glm::vec3 normal = glm::normalize(glm::cross(b-a, c-a));
-				glm::vec3 in = glm::cross(normal, along);
-
-				//check how much 'remain' is pointing out of the triangle:
-				float d = glm::dot(remain, in);
-				if (d < 0.0f) {
-					//bounce off of the wall:
-					remain += (-1.25f * d) * in;
-				} else {
-					//if it's just pointing along the edge, bend slightly away from wall:
-					remain += 0.01f * d * in;
-				}
-			}
-		}
-
-		if (remain != glm::vec3(0.0f)) {
-			std::cout << "NOTE: code used full iteration budget for walking." << std::endl;
-		}
-
-		//update player's position to respect walking:
-		walker.body->position = walkmesh->to_world_point(walker.at) + glm::vec3(0.0f, 0.0f, walker.groundOffset);
-		//std::cout << "walker position: " << walker.body->position.x << ", " << walker.body->position.y << ", " << walker.body->position.z << std::endl;
-		walker.update_legs();
-		//update the rotation 
-		walker.left_leg.update(walkmesh->to_world_point(walker.left_leg.at));
-		//place debug cone 
-		debugcone->position = walkmesh->to_world_point(walker.left_leg.at);
-		std::cout << "debugcone position: " << debugcone->position.x << ", " << debugcone->position.y << ", " << debugcone->position.z << std::endl;
-		/*
-		debugcone->position = walkmesh->to_world_point(walker.at);
-		glm::vec3 debug_world = debugcone->getWorldPostion();
-		std::cout << "walker position: " << debug_world.x << ", " << debug_world.y << ", " << debug_world.z << std::endl;
-		//crude 
-		walker.left_leg.update(walkmesh->to_world_point(walker.at));
-		glm::vec3 ankle_world = walker.left_leg.ankle->getWorldPosition();
-		std::cout << "ankle position" << ankle_world.x << ", " << ankle_world.y << ", " << ankle_world.z << std::endl;
-		//walker.left_leg.hip->rotation = walker.left_leg.hip->rotation * glm::angleAxis(glm::radians(90.f), glm::vec3(0.0f, 1.0f, 0.0f));
-
-		//walker.left_leg.hip->rotation =  glm::angleAxis(glm::radians(walker.world_rotation), glm::vec3(0.0f, 0.0f, 1.0f)) * walker.left_leg.hip->rotation;
-		//std::cout << "walker rotation: " << walker.world_rotation << std::endl;
-		//std::cout << "radians: " << glm::radians(walker.world_rotation) << std::endl;
-		//walker.left_leg.printEverything();
 		*/
-
 	//Just a leg, walking...
 	static bool once = false;
-	static glm::vec3 leg_pos = walker.left_leg.ankle->getWorldPosition();
 	//make a lambda to move leg...
 	{
 		float angle = 0.f;
@@ -416,56 +343,7 @@ void PlayMode::update(float elapsed) {
 		//move in facing direction (in world space):
 		glm::vec3 offset = glm::vec4(dir*0.2f, 0.f,  0.0f, 0.0f);
 
-		//get move in world coordinate system:
-		glm::vec3 remain = offset;
-
-		//using a for() instead of a while() here so that if walkpoint gets stuck in
-		// some awkward case, code will not infinite loop:
-		for (uint32_t iter = 0; iter < 10; ++iter) {
-			if (remain == glm::vec3(0.0f)) break;
-			WalkPoint end;
-			float time;
-			walkmesh->walk_in_triangle(leg->at, remain, &end, &time);
-			leg->at = end;
-			if (time == 1.0f) {
-				//finished within triangle:
-				remain = glm::vec3(0.0f);
-				break;
-			}
-			//some step remains:
-			remain *= (1.0f - time);
-			//try to step over edge:
-			glm::quat rotation;
-			if (walkmesh->cross_edge(leg->at, &end, &rotation)) {
-				//stepped to a new triangle:
-				leg->at = end;
-				//rotate step to follow surface:
-				remain = rotation * remain;
-			} else {
-				//ran into a wall, bounce / slide along it:
-				glm::vec3 const &a = walkmesh->vertices[leg->at.indices.x];
-				glm::vec3 const &b = walkmesh->vertices[leg->at.indices.y];
-				glm::vec3 const &c = walkmesh->vertices[leg->at.indices.z];
-				glm::vec3 along = glm::normalize(b-a);
-				glm::vec3 normal = glm::normalize(glm::cross(b-a, c-a));
-				glm::vec3 in = glm::cross(normal, along);
-
-				//check how much 'remain' is pointing out of the triangle:
-				float d = glm::dot(remain, in);
-				if (d < 0.0f) {
-					//bounce off of the wall:
-					remain += (-1.25f * d) * in;
-				} else {
-					//if it's just pointing along the edge, bend slightly away from wall:
-					remain += 0.01f * d * in;
-				}
-			}
-		}
-
-		if (remain != glm::vec3(0.0f)) {
-			std::cout << "NOTE: code used full iteration budget for walking." << std::endl;
-			assert(false);
-		}
+		leg->update_leg_at(offset);
 
 		//update leg position:
 		leg->hip->position = walkmesh->to_world_point(leg->at) + glm::vec3(0.0f, 0.0f, 9.0f);
@@ -473,11 +351,15 @@ void PlayMode::update(float elapsed) {
 		
 		//update leg?
 		if (!once) {
-			leg_pos = walkmesh->to_world_point(leg->at);
+			leg->update_step_to();
 			once = true;
 		}
-		debugcone->position = leg_pos;
-		leg->update(leg_pos);
+		debugcone->position = leg->step_to;
+		leg->update(leg->step_to);
+		//update the step position every time timer restes
+		if (timer == 0.0f) {
+			leg->update_step_to();
+		}
 	}
 	
 
@@ -654,7 +536,7 @@ void Leg::printEverything() {
 	std::cout << "---------------------" << std::endl;
 }
 
-void Leg::update_leg_at(glm::vec3 offset, WalkMesh const &walkmesh)
+void Leg::update_leg_at(glm::vec3 remain)
 {
 	Leg* leg = this;
 	for (uint32_t iter = 0; iter < 10; ++iter) {
@@ -703,4 +585,8 @@ void Leg::update_leg_at(glm::vec3 offset, WalkMesh const &walkmesh)
 		assert(false);
 	}
 
+}
+
+void Leg::update_step_to() {
+	step_to = walkmesh->to_world_point(at);
 }

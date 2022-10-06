@@ -28,7 +28,7 @@ struct Leg {
 	//walkmesh location:
 	WalkPoint at;
 	//where it is stepping
-	glm::vec3 step_to;
+	glm::vec3 step_to = glm::vec3(0.0f, 0.0f, 0.0f);
 	//make a default constructor:
 	Leg() = default;
 	//make a constructor that takes in the three joints:
@@ -44,7 +44,9 @@ struct Leg {
 	//debug print function:
 	void printEverything();
 	//update leg walk point
-	void update_stepto(glm::vec3 offset, WalkMesh const &walkmesh);
+	void update_leg_at(glm::vec3 offset);
+	//update the stepping point to at position...
+	void update_step_to();
 };
 
 
