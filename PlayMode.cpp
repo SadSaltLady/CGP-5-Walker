@@ -67,6 +67,7 @@ PlayMode::PlayMode() : scene(*my_scene) {
 	if (leg_parts[4] == nullptr) throw std::runtime_error("right knee not found");
 	if (leg_parts[5] == nullptr) throw std::runtime_error("right ankle not found");
 	if (body == nullptr) throw std::runtime_error("body not found");
+	if (debugcone == nullptr) throw std::runtime_error("cone not found");
 	//construct legs and Walker
 	Leg Left = Leg(leg_parts[0], leg_parts[1], leg_parts[2]);
 	Leg Right = Leg(leg_parts[3], leg_parts[4], leg_parts[5]);
@@ -301,7 +302,7 @@ void PlayMode::update(float elapsed) {
 		camera->transform->position += move.x * right + move.y * forward;
 		*/
 	}
-s
+
 	static bool once = false;
 	//make a lambda to move leg...
 	{
@@ -319,24 +320,39 @@ s
 		//apply the world rotation 
 		walker.body->rotation = glm::angleAxis(glm::radians(walker.world_rotation), glm::vec3(0.0f, 0.0f, 1.0f));
 		//move in facing direction (in world space):
-		glm::vec3 offset = glm::rotate(walker.body->rotation, glm::vec3(0.0f, dir*0.2f, 0.0f));
+		glm::vec3 offset = glm::rotate(walker.body->rotation, glm::vec3(0.0f, dir*0.05f, 0.0f));
 		walker.update_at(offset); //also sets the position
 		//now take the legs with it
 		walker.update_legs();
+
 		//-------------------------------
 
 
 		//update Leg
 		Leg* leg = &walker.left_leg;
-		//update the at position of the leg
-		leg->update_leg_at(offset);		//update leg position:
-		debugcone->position = leg->step_to;
-		leg->update(leg->step_to);
-		//update the step position every time timer restes
-		if (leg->is_too_far()) {
-			leg->update_step_to();
-		}
 		
+			//called in update to do everything necessary to move the leg
+		leg->leg_routine(offset, elapsed);
+		
+
+		leg = &walker.right_leg;
+		leg->update_leg_at(offset);		//update leg position:
+		leg->update(leg->get_animated_position());
+		//update the step position every time timer restes
+		if (leg->is_too_far() && !leg->animating) {
+			leg->prev_step = leg->step_to;
+			leg->update_step_to();
+			leg->animating = true;
+		}
+		if (leg->animating) {
+			leg->timer += elapsed;
+			if (leg->timer > leg->anim_time) {
+				leg->animating = false;
+				leg->timer = 0.f;
+			}
+		}
+		//just rotate 180 around the world z axis
+		//walker.body->rotation = glm::angleAxis(glm::radians(180.f), glm::vec3(0.0f, 0.0f, 1.0f)) * walker.body->rotation;
 	}
 	
 
@@ -605,8 +621,36 @@ void Leg::update_step_to() {
 bool Leg::is_too_far()
 {
 	const glm::vec3 removeZ = glm::vec3(1.0f, 1.0f, 0.0f);
-	if (glm::distance(step_to * removeZ, hip->position * removeZ) > 6.f) {
+	if (glm::distance(step_to * removeZ, hip->position * removeZ) > 5.f) {
 		return true;
 	}
 	return false;
+}
+
+glm::vec3 Leg::get_animated_position(){
+	if (!animating) return step_to;
+	float t = timer/(anim_time);
+	glm::vec3 pos = glm::mix(prev_step, step_to, t);
+	//make a z offset that goes up and down 
+	float zpos = sinf((float)M_PI * t)* 2.0f; //multiply by 2 arbitrary height 
+	return pos + glm::vec3(0.0f, 0.0f, zpos);
+}
+
+void Leg::leg_routine(glm::vec3 offset, float elapsed)
+{
+	update_leg_at(offset);		//update leg position:
+	update(get_animated_position());
+	//update the step position every time timer restes
+	if (is_too_far() && !animating) {
+		prev_step = step_to;
+		update_step_to();
+		animating = true;
+	}
+	if (animating) {
+		timer += elapsed;
+		if (timer > anim_time) {
+			animating = false;
+			timer = 0.f;
+		}
+	}
 }

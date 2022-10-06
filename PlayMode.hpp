@@ -29,6 +29,12 @@ struct Leg {
 	WalkPoint at;
 	//where it is stepping
 	glm::vec3 step_to = glm::vec3(0.0f, 0.0f, 0.0f);
+	//prev step(animation)
+	glm::vec3 prev_step = glm::vec3(0.0f, 0.0f, 0.0f);
+	//timer and animations 
+	float timer = 0.0f;
+	float anim_time = 0.25f;
+	bool animating = false;
 	//make a default constructor:
 	Leg() = default;
 	//make a constructor that takes in the three joints:
@@ -49,6 +55,11 @@ struct Leg {
 	void update_step_to();
 	//check if legs are going too far
 	bool is_too_far();
+	//called in update to do everything necessary to move the leg
+	void leg_routine(glm::vec3 offset, float elapsed);
+	//returns animated position 
+	glm::vec3 get_animated_position();
+
 };
 
 
@@ -61,13 +72,13 @@ struct Walker {
 	//position on the walkmesh:
 	WalkPoint at;
 	//how far should we hover off the ground?
-	float groundOffset = 8.0f;
-	//body to leg offset:
+	float groundOffset = 10.0f;
+	//body to leg offset
 	glm::vec3 body_to_leftleg = glm::vec3(0.0f, 0.0f, 0.0f);
 	glm::vec3 body_to_rightleg = glm::vec3(0.0f, 0.0f, 0.0f);
 
 	//movement:
-	float speed = 0.5f;
+	float speed = 0.25f;
 
 	float world_rotation = 0.0f;
 
