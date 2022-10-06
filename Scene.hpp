@@ -50,6 +50,7 @@ struct Scene {
 		//added utility functions:
 		glm::vec3 getWorldPosition() const;
 		glm::quat getWorldRotation() const;
+		glm::vec3 setWorldPosition(glm::vec3 const &pos);
 	};
 
 	struct Drawable {

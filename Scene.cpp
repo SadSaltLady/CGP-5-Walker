@@ -82,6 +82,15 @@ glm::quat Scene::Transform::getWorldRotation() const {
 		return parent->getWorldRotation() * rotation;
 	}
 }
+
+glm::vec3 Scene::Transform::setWorldPosition(glm::vec3 const &pos) {
+	if (!parent) {
+		position = pos;
+	} else {
+		position = glm::vec3(parent->make_local_to_world() * glm::vec4(pos, 1.0f));
+	}
+	return position;
+}
 //-------------------------
 
 glm::mat4 Scene::Camera::make_projection() const {
